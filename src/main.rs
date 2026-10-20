@@ -84,8 +84,8 @@ fn main() {
 
     let settings_ev = settings.clone();
 
-    event_loop.run(move |event, elwt| {
-        elwt.set_control_flow(ControlFlow::Wait);
+    event_loop.run(move |event, _target, control_flow| {
+        *control_flow = ControlFlow::Wait;
 
         match event {
             Event::UserEvent(UserEvent::Navigate(raw)) => {
@@ -136,7 +136,7 @@ fn main() {
                         "try{localStorage.clear();sessionStorage.clear();}catch(e){}",
                     );
                 }
-                elwt.exit();
+                *control_flow = ControlFlow::Exit;
             }
             _ => {}
         }
