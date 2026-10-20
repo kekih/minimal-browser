@@ -35,8 +35,8 @@ let currentUrl = store.get('homepage');
 function createWindow() {
   const bounds = store.get('windowBounds');
   mainWindow = new BrowserWindow({
-    width: bounds.width,
-    height: bounds.height,
+    width: bounds.width || 1200,
+    height: bounds.height || 800,
     minWidth: 400,
     minHeight: 300,
     show: false,
@@ -81,16 +81,16 @@ function createWindow() {
   });
 
   // Save bounds on resize/move
+  const saveBounds = () => {
+    if (!mainWindow.isMaximized() && !mainWindow.isMinimized()) {
+      store.set('windowBounds', mainWindow.getBounds());
+    }
+  };
   mainWindow.on('resize', () => {
-    if (!mainWindow.isMaximized()) {
-      store.set('windowBounds', mainWindow.getBounds());
-    }
+    updateBrowserViewBounds();
+    saveBounds();
   });
-  mainWindow.on('move', () => {
-    if (!mainWindow.isMaximized()) {
-      store.set('windowBounds', mainWindow.getBounds());
-    }
-  });
+  mainWindow.on('move', saveBounds);
 
   // Navigation events
   browserView.webContents.on('did-navigate', (e, url) => {
@@ -112,7 +112,7 @@ function createWindow() {
     mainWindow.webContents.send('loading', false);
   });
 
-  // Open external links in default browser optionally, or same view
+  // Open external links in same view
   browserView.webContents.setWindowOpenHandler(({ url }) => {
     browserView.webContents.loadURL(url);
     return { action: 'deny' };
@@ -126,24 +126,33 @@ function createWindow() {
 
 function updateBrowserViewBounds() {
   if (!mainWindow || !browserView) return;
-  const [width, height] = mainWindow.getContentSize();
-  // Leave space for toolbar (~50px)
-  browserView.setBounds({ x: 0, y: 50, width: width, height: height - 50 });
+  try {
+    const [width, height] = mainWindow.getContentSize();
+    browserView.setBounds({ x: 0, y: 50, width: Math.max(0, width), height: Math.max(0, height - 50) });
+  } catch (e) {
+    // ignore
+  }
 }
 
 function loadBitwardenExtension(ses) {
-  const extPath = path.join(__dirname, 'extensions', 'bitwarden');
-  if (fs.existsSync(extPath)) {
-    ses.loadExtension(extPath, { allowFileAccess: true })
-      .then((ext) => {
-        console.log('Bitwarden loaded:', ext.name);
-      })
-      .catch((err) => {
-        console.warn('Failed to load Bitwarden:', err.message);
-      });
-  } else {
-    console.log('Bitwarden extension not found in extensions/bitwarden. Place unpacked extension there to enable.');
+  const candidates = [
+    path.join(__dirname, 'extensions', 'bitwarden'),
+    path.join(process.resourcesPath || '', 'extensions', 'bitwarden'),
+    path.join(app.getPath('userData'), 'extensions', 'bitwarden')
+  ];
+  for (const extPath of candidates) {
+    if (fs.existsSync(extPath)) {
+      ses.loadExtension(extPath, { allowFileAccess: true })
+        .then((ext) => {
+          console.log('Bitwarden loaded from', extPath, ':', ext.name);
+        })
+        .catch((err) => {
+          console.warn('Failed to load Bitwarden from', extPath, ':', err.message);
+        });
+      return;
+    }
   }
+  console.log('Bitwarden extension not found. Place unpacked extension in extensions/bitwarden (see README).');
 }
 
 function createMenu() {
@@ -160,7 +169,7 @@ function createMenu() {
         {
           label: 'Settings',
           accelerator: 'CmdOrCtrl+,',
-          click: () => mainWindow.webContents.send('open-settings')
+          click: () => mainWindow && mainWindow.webContents.send('open-settings')
         },
         { type: 'separator' },
         { role: 'quit' }
@@ -184,12 +193,12 @@ function createMenu() {
         {
           label: 'Reload',
           accelerator: 'CmdOrCtrl+R',
-          click: () => browserView.webContents.reload()
+          click: () => browserView && browserView.webContents.reload()
         },
         {
           label: 'Force Reload',
           accelerator: 'CmdOrCtrl+Shift+R',
-          click: () => browserView.webContents.reloadIgnoringCache()
+          click: () => browserView && browserView.webContents.reloadIgnoringCache()
         },
         { type: 'separator' },
         { role: 'togglefullscreen' },
@@ -197,6 +206,7 @@ function createMenu() {
           label: 'Toggle DevTools',
           accelerator: 'F12',
           click: () => {
+            if (!browserView) return;
             if (browserView.webContents.isDevToolsOpened()) {
               browserView.webContents.closeDevTools();
             } else {
@@ -213,20 +223,20 @@ function createMenu() {
           label: 'Back',
           accelerator: 'Alt+Left',
           click: () => {
-            if (browserView.webContents.canGoBack()) browserView.webContents.goBack();
+            if (browserView && browserView.webContents.canGoBack()) browserView.webContents.goBack();
           }
         },
         {
           label: 'Forward',
           accelerator: 'Alt+Right',
           click: () => {
-            if (browserView.webContents.canGoForward()) browserView.webContents.goForward();
+            if (browserView && browserView.webContents.canGoForward()) browserView.webContents.goForward();
           }
         },
         {
           label: 'Home',
           accelerator: 'Alt+Home',
-          click: () => browserView.webContents.loadURL(store.get('homepage'))
+          click: () => browserView && browserView.webContents.loadURL(store.get('homepage'))
         }
       ]
     },
@@ -258,23 +268,28 @@ function createMenu() {
 
 // IPC handlers
 ipcMain.handle('navigate', (e, url) => {
-  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('file://')) {
-    url = 'https://' + url;
+  if (!browserView) return false;
+  if (!url.startsWith('http://') && !url.startsWith('https://') && !url.startsWith('file://') && !url.startsWith('about:')) {
+    if (url.includes('.') && !url.includes(' ')) {
+      url = 'https://' + url;
+    } else {
+      url = 'https://duckduckgo.com/?q=' + encodeURIComponent(url);
+    }
   }
   browserView.webContents.loadURL(url);
   return true;
 });
 
 ipcMain.handle('go-back', () => {
-  if (browserView.webContents.canGoBack()) browserView.webContents.goBack();
+  if (browserView && browserView.webContents.canGoBack()) browserView.webContents.goBack();
 });
 
 ipcMain.handle('go-forward', () => {
-  if (browserView.webContents.canGoForward()) browserView.webContents.goForward();
+  if (browserView && browserView.webContents.canGoForward()) browserView.webContents.goForward();
 });
 
 ipcMain.handle('reload', () => {
-  browserView.webContents.reload();
+  if (browserView) browserView.webContents.reload();
 });
 
 ipcMain.handle('get-settings', () => {
@@ -285,10 +300,6 @@ ipcMain.handle('save-settings', (e, settings) => {
   Object.keys(settings).forEach(key => {
     store.set(key, settings[key]);
   });
-  // Apply some immediately
-  if (settings.homepage) {
-    // no immediate action
-  }
   return true;
 });
 
@@ -305,12 +316,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') {
     if (store.get('clearOnExit')) {
-      session.fromPartition('persist:main').clearStorageData();
+      session.fromPartition('persist:main').clearStorageData().catch(() => {});
     }
     app.quit();
   }
-});
-
-app.on('browser-window-resize', () => {
-  updateBrowserViewBounds();
 });

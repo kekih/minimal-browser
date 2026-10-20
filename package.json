@@ -17,7 +17,7 @@
     "electron-builder": "^25.1.8"
   },
   "dependencies": {
-    "electron-store": "^10.0.0"
+    "electron-store": "^8.2.0"
   },
   "build": {
     "appId": "com.kekih.minimal-browser",
