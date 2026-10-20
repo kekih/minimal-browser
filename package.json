@@ -10,7 +10,10 @@
     "build:linux": "electron-builder --linux",
     "pack": "electron-builder --dir"
   },
-  "author": "kekih",
+  "author": {
+    "name": "kekih",
+    "email": "kekih@users.noreply.github.com"
+  },
   "license": "MIT",
   "devDependencies": {
     "electron": "^33.2.0",
@@ -55,6 +58,7 @@
         }
       ],
       "category": "Network",
+      "maintainer": "kekih <kekih@users.noreply.github.com>",
       "artifactName": "${productName}-${version}-Linux-${arch}.${ext}"
     },
     "nsis": {
