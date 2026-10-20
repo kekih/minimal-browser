@@ -1,0 +1,65 @@
+{
+  "name": "minimal-browser",
+  "version": "1.0.0",
+  "description": "Lightweight optimized browser with Bitwarden, flexible customization and data persistence",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron .",
+    "build": "electron-builder",
+    "build:win": "electron-builder --win",
+    "build:linux": "electron-builder --linux",
+    "pack": "electron-builder --dir"
+  },
+  "author": "kekih",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^33.2.0",
+    "electron-builder": "^25.1.8"
+  },
+  "dependencies": {
+    "electron-store": "^10.0.0"
+  },
+  "build": {
+    "appId": "com.kekih.minimal-browser",
+    "productName": "Minimal Browser",
+    "directories": {
+      "output": "dist"
+    },
+    "files": [
+      "**/*",
+      "!dist/**",
+      "!node_modules/.cache/**"
+    ],
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": ["x64"]
+        },
+        {
+          "target": "portable",
+          "arch": ["x64"]
+        }
+      ],
+      "artifactName": "${productName}-${version}-Windows-${arch}.${ext}"
+    },
+    "linux": {
+      "target": [
+        {
+          "target": "AppImage",
+          "arch": ["x64"]
+        },
+        {
+          "target": "deb",
+          "arch": ["x64"]
+        }
+      ],
+      "category": "Network",
+      "artifactName": "${productName}-${version}-Linux-${arch}.${ext}"
+    },
+    "nsis": {
+      "oneClick": false,
+      "allowToChangeInstallationDirectory": true
+    }
+  }
+}
