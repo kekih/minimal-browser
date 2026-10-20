@@ -1,6 +1,6 @@
 {
   "name": "minimal-browser",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "description": "Lightweight optimized browser with Bitwarden, flexible customization and data persistence",
   "main": "main.js",
   "scripts": {

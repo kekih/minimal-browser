@@ -1,4 +1,4 @@
-const { app, BrowserWindow, BrowserView, ipcMain, session, Menu, dialog, shell } = require('electron');
+const { app, BrowserWindow, BrowserView, ipcMain, session, Menu, dialog, shell, nativeTheme } = require('electron');
 const path = require('path');
 const fs = require('fs');
 const Store = require('electron-store');
@@ -12,14 +12,14 @@ app.commandLine.appendSwitch('disable-translate');
 app.commandLine.appendSwitch('metrics-recording-only');
 app.commandLine.appendSwitch('no-first-run');
 app.commandLine.appendSwitch('safebrowsing-disable-auto-update');
-// Optional: uncomment for even lower RAM (may reduce performance on some systems)
-// app.disableHardwareAcceleration();
+// Force dark mode for Chromium UI and prefers-color-scheme
+app.commandLine.appendSwitch('force-dark-mode');
 
 const store = new Store({
   defaults: {
     windowBounds: { width: 1200, height: 800 },
     homepage: 'https://duckduckgo.com',
-    theme: 'system',
+    theme: 'dark',
     startMaximized: false,
     enableBitwarden: true,
     customCSS: '',
@@ -28,9 +28,23 @@ const store = new Store({
   }
 });
 
+// Apply theme early
+function applyTheme(theme) {
+  const t = theme || store.get('theme') || 'dark';
+  if (t === 'light') {
+    nativeTheme.themeSource = 'light';
+  } else if (t === 'system') {
+    nativeTheme.themeSource = 'system';
+  } else {
+    nativeTheme.themeSource = 'dark';
+  }
+}
+applyTheme();
+
 let mainWindow = null;
 let browserView = null;
 let currentUrl = store.get('homepage');
+let settingsOpen = false;
 
 function createWindow() {
   const bounds = store.get('windowBounds');
@@ -48,7 +62,8 @@ function createWindow() {
     },
     title: 'Minimal Browser',
     backgroundColor: '#1a1a1a',
-    autoHideMenuBar: true
+    autoHideMenuBar: true,
+    darkTheme: true
   });
 
   // Persistent session for data saving (cookies, storage, cache)
@@ -95,21 +110,31 @@ function createWindow() {
   // Navigation events
   browserView.webContents.on('did-navigate', (e, url) => {
     currentUrl = url;
-    mainWindow.webContents.send('url-changed', url);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('url-changed', url);
+    }
   });
   browserView.webContents.on('did-navigate-in-page', (e, url) => {
     currentUrl = url;
-    mainWindow.webContents.send('url-changed', url);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('url-changed', url);
+    }
   });
   browserView.webContents.on('page-title-updated', (e, title) => {
-    mainWindow.setTitle(title + ' - Minimal Browser');
-    mainWindow.webContents.send('title-changed', title);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.setTitle(title + ' - Minimal Browser');
+      mainWindow.webContents.send('title-changed', title);
+    }
   });
   browserView.webContents.on('did-start-loading', () => {
-    mainWindow.webContents.send('loading', true);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('loading', true);
+    }
   });
   browserView.webContents.on('did-stop-loading', () => {
-    mainWindow.webContents.send('loading', false);
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('loading', false);
+    }
   });
 
   // Open external links in same view
@@ -128,10 +153,22 @@ function updateBrowserViewBounds() {
   if (!mainWindow || !browserView) return;
   try {
     const [width, height] = mainWindow.getContentSize();
-    browserView.setBounds({ x: 0, y: 50, width: Math.max(0, width), height: Math.max(0, height - 50) });
+    if (settingsOpen) {
+      // Leave room on the right for settings panel (~360px)
+      const panelWidth = 360;
+      const viewWidth = Math.max(0, width - panelWidth);
+      browserView.setBounds({ x: 0, y: 50, width: viewWidth, height: Math.max(0, height - 50) });
+    } else {
+      browserView.setBounds({ x: 0, y: 50, width: Math.max(0, width), height: Math.max(0, height - 50) });
+    }
   } catch (e) {
     // ignore
   }
+}
+
+function setSettingsOpen(open) {
+  settingsOpen = !!open;
+  updateBrowserViewBounds();
 }
 
 function loadBitwardenExtension(ses) {
@@ -169,7 +206,12 @@ function createMenu() {
         {
           label: 'Settings',
           accelerator: 'CmdOrCtrl+,',
-          click: () => mainWindow && mainWindow.webContents.send('open-settings')
+          click: () => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              setSettingsOpen(true);
+              mainWindow.webContents.send('open-settings');
+            }
+          }
         },
         { type: 'separator' },
         { role: 'quit' }
@@ -249,7 +291,7 @@ function createMenu() {
             dialog.showMessageBox(mainWindow, {
               type: 'info',
               title: 'About Minimal Browser',
-              message: 'Minimal Browser v1.0.0',
+              message: 'Minimal Browser v1.0.1',
               detail: 'Lightweight optimized browser with Bitwarden support, flexible customization and data persistence.\n\nGitHub: https://github.com/kekih/minimal-browser'
             });
           }
@@ -300,12 +342,26 @@ ipcMain.handle('save-settings', (e, settings) => {
   Object.keys(settings).forEach(key => {
     store.set(key, settings[key]);
   });
+  if (settings.theme) {
+    applyTheme(settings.theme);
+  }
   return true;
 });
 
 ipcMain.handle('get-url', () => currentUrl);
 
+ipcMain.handle('settings-opened', () => {
+  setSettingsOpen(true);
+  return true;
+});
+
+ipcMain.handle('settings-closed', () => {
+  setSettingsOpen(false);
+  return true;
+});
+
 app.whenReady().then(() => {
+  applyTheme();
   createWindow();
 
   app.on('activate', () => {
