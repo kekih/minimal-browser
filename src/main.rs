@@ -16,7 +16,7 @@ enum UserEvent {
     SaveSettings(String),
 }
 
-fn main() -> wry::Result<()> {
+fn main() {
     let settings = Arc::new(Mutex::new(Settings::load()));
     let homepage = settings.lock().unwrap().homepage.clone();
     let start_max = settings.lock().unwrap().start_maximized;
@@ -30,7 +30,7 @@ fn main() -> wry::Result<()> {
         .with_inner_size(tao::dpi::LogicalSize::new(1200.0, 800.0))
         .with_min_inner_size(tao::dpi::LogicalSize::new(400.0, 300.0))
         .build(&event_loop)
-        .expect("window");
+        .expect("Failed to create window");
 
     if start_max {
         window.set_maximized(true);
@@ -72,14 +72,14 @@ fn main() -> wry::Result<()> {
         target_os = "ios",
         target_os = "android"
     ))]
-    let webview = builder.build(&window)?;
+    let webview = builder.build(&window).expect("Failed to create webview");
 
     #[cfg(target_os = "linux")]
     let webview = {
         use tao::platform::unix::WindowExtUnix;
         use wry::WebViewBuilderExtUnix;
         let vbox = window.default_vbox().expect("gtk vbox");
-        builder.build_gtk(vbox)?
+        builder.build_gtk(vbox).expect("Failed to create webview")
     };
 
     let settings_ev = settings.clone();
