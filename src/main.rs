@@ -86,64 +86,65 @@ fn main() -> wry::Result<()> {
 
     let settings_ev = settings.clone();
 
-    event_loop.run(move |event, elwt| {
-        elwt.set_control_flow(ControlFlow::Wait);
+    event_loop
+        .run(move |event, elwt| {
+            elwt.set_control_flow(ControlFlow::Wait);
 
-        match event {
-            Event::UserEvent(UserEvent::Navigate(raw)) => {
-                let url = normalize_url(&raw);
-                let _ = webview.load_url(&url);
-            }
-            Event::UserEvent(UserEvent::OpenSettings) => {
-                let s = settings_ev.lock().unwrap().clone();
-                let json = serde_json::to_string(&s).unwrap_or_else(|_| "{}".into());
-                let js = format!(
-                    "window.__mbOpenSettings && window.__mbOpenSettings({});",
-                    serde_json::to_string(&json).unwrap_or_else(|_| "\"{}\"".into())
-                );
-                let _ = webview.evaluate_script(&js);
-            }
-            Event::UserEvent(UserEvent::SaveSettings(data)) => {
-                if let Ok(partial) = serde_json::from_str::<serde_json::Value>(&data) {
-                    let mut s = settings_ev.lock().unwrap();
-                    if let Some(v) = partial.get("homepage").and_then(|x| x.as_str()) {
-                        s.homepage = v.to_string();
-                    }
-                    if let Some(v) = partial.get("theme").and_then(|x| x.as_str()) {
-                        s.theme = v.to_string();
-                    }
-                    if let Some(v) = partial.get("start_maximized").and_then(|x| x.as_bool()) {
-                        s.start_maximized = v;
-                    }
-                    if let Some(v) = partial.get("clear_on_exit").and_then(|x| x.as_bool()) {
-                        s.clear_on_exit = v;
-                    }
-                    let theme = s.theme.clone();
-                    let _ = s.save();
-                    drop(s);
+            match event {
+                Event::UserEvent(UserEvent::Navigate(raw)) => {
+                    let url = normalize_url(&raw);
+                    let _ = webview.load_url(&url);
+                }
+                Event::UserEvent(UserEvent::OpenSettings) => {
+                    let s = settings_ev.lock().unwrap().clone();
+                    let json = serde_json::to_string(&s).unwrap_or_else(|_| "{}".into());
                     let js = format!(
-                        "window.__mbSetTheme && window.__mbSetTheme({});",
-                        serde_json::to_string(&theme).unwrap_or_else(|_| "\"dark\"".into())
+                        "window.__mbOpenSettings && window.__mbOpenSettings({});",
+                        serde_json::to_string(&json).unwrap_or_else(|_| "\"{}\"".into())
                     );
                     let _ = webview.evaluate_script(&js);
                 }
-            }
-            Event::WindowEvent {
-                event: WindowEvent::CloseRequested,
-                ..
-            } => {
-                let clear = settings_ev.lock().unwrap().clear_on_exit;
-                if clear {
-                    let _ = webview.evaluate_script(
-                        "try{localStorage.clear();sessionStorage.clear();}catch(e){}",
-                    );
+                Event::UserEvent(UserEvent::SaveSettings(data)) => {
+                    if let Ok(partial) = serde_json::from_str::<serde_json::Value>(&data) {
+                        let mut s = settings_ev.lock().unwrap();
+                        if let Some(v) = partial.get("homepage").and_then(|x| x.as_str()) {
+                            s.homepage = v.to_string();
+                        }
+                        if let Some(v) = partial.get("theme").and_then(|x| x.as_str()) {
+                            s.theme = v.to_string();
+                        }
+                        if let Some(v) = partial.get("start_maximized").and_then(|x| x.as_bool()) {
+                            s.start_maximized = v;
+                        }
+                        if let Some(v) = partial.get("clear_on_exit").and_then(|x| x.as_bool()) {
+                            s.clear_on_exit = v;
+                        }
+                        let theme = s.theme.clone();
+                        let _ = s.save();
+                        drop(s);
+                        let js = format!(
+                            "window.__mbSetTheme && window.__mbSetTheme({});",
+                            serde_json::to_string(&theme).unwrap_or_else(|_| "\"dark\"".into())
+                        );
+                        let _ = webview.evaluate_script(&js);
+                    }
                 }
-                elwt.exit();
+                Event::WindowEvent {
+                    event: WindowEvent::CloseRequested,
+                    ..
+                } => {
+                    let clear = settings_ev.lock().unwrap().clear_on_exit;
+                    if clear {
+                        let _ = webview.evaluate_script(
+                            "try{localStorage.clear();sessionStorage.clear();}catch(e){}",
+                        );
+                    }
+                    elwt.exit();
+                }
+                _ => {}
             }
-            _ => {}
-        }
-    })
-    .expect("event loop run");
+        })
+        .expect("event loop run");
 
     Ok(())
 }
@@ -178,6 +179,8 @@ fn normalize_url(raw: &str) -> String {
 }
 
 fn inject_script(theme: &str) -> String {
-    let theme_js = serde_json::to_string(theme).unwrap_or_else(|_| "\"dark\"".into());
-    format!(
-        r#
+    let theme_lit = serde_json::to_string(theme).unwrap_or_else(|_| "\"dark\"".into());
+    let js = include_str!("inject.js");
+    // Replace default THEME assignment
+    js.replacen("var THEME = \"dark\";", &format!("var THEME = {theme_lit};"), 1)
+}

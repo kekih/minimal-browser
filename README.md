@@ -1,67 +1,55 @@
-# Minimal Browser
+# Minimal Browser (Rust)
 
-Lightweight, optimized Electron-based browser with:
+Lightweight desktop browser written in **Rust** using [tao](https://github.com/tauri-apps/tao) + [wry](https://github.com/tauri-apps/wry).
 
-- **Minimal resource usage** — disabled unnecessary Chromium features, optional hardware acceleration off
-- **Bitwarden support** — place the unpacked extension in `extensions/bitwarden`
-- **Flexible customization** — homepage, theme, start maximized, clear on exit, custom CSS
-- **Data persistence** — cookies, localStorage, cache saved in persistent partition
-- **Settings panel** and keyboard shortcuts
-
-Built for Windows and Linux. GitHub Actions automatically builds releases.
-
-## Download
-
-Go to [Releases](https://github.com/kekih/minimal-browser/releases) and download the latest build for your OS:
-
-- **Windows**: `.exe` installer or portable
-- **Linux**: `.AppImage` or `.deb`
+Uses the **system WebView** (WebView2 on Windows, WebKitGTK on Linux) — much lower RAM/CPU than Electron/Chromium embeds.
 
 ## Features
 
-- Clean dark UI with address bar, navigation buttons
-- Persistent browsing data (unless "Clear data on exit" is enabled)
-- Settings saved with `electron-store`
-- DevTools (F12)
-- Open external links in the same view
+- Minimal resource usage (native WebView, LTO release build)
+- Dark theme by default
+- Settings panel (homepage, theme, start maximized, clear on exit)
+- Settings saved to `~/.config/minimal-browser/settings.json` (or OS equivalent)
+- URL bar + search via DuckDuckGo
+- Back / Forward / Reload
+
+## Download
+
+GitHub Actions builds Windows and Linux binaries on every push:
+
+https://github.com/kekih/minimal-browser/actions
+
+For permanent downloads, create a tag `v2.0.0` and push it — files appear under **Releases**.
+
+## Run from source
+
+### Windows
+Needs [WebView2 Runtime](https://developer.microsoft.com/en-us/microsoft-edge/webview2/) (usually already installed on Win10/11).
+
+```bash
+cargo run --release
+```
+
+### Linux
+```bash
+sudo apt install libwebkit2gtk-4.1-dev libgtk-3-dev
+cargo run --release
+```
 
 ## Bitwarden
 
-1. Download the Bitwarden Chrome extension CRX from the [Chrome Web Store](https://chromewebstore.google.com/detail/bitwarden-password-manage/nngceckbapebfimnlniiiahkandclblb) (use a CRX downloader if needed) or from [crx4chrome](https://www.crx4chrome.com/).
-2. Rename `.crx` to `.zip` and extract it.
-3. Place the extracted folder as `extensions/bitwarden` next to the browser executable (or in the project root for development).
-4. Restart the browser. Bitwarden should load automatically.
+System WebViews **do not** support Chrome extensions. Use the [Bitwarden desktop app](https://bitwarden.com/download/) — it can autofill in other apps / browsers via OS integration.
 
-Alternatively, you can use the Bitwarden desktop app + browser integration, or install other password managers the same way.
+On Windows, wry can load some extension paths (`with_extension_path`), but full Chrome Web Store compatibility is not guaranteed.
 
-## Development
+## Why not Electron?
 
-```bash
-git clone https://github.com/kekih/minimal-browser.git
-cd minimal-browser
-npm install
-npm start
-```
-
-## Build locally
-
-```bash
-npm run build:win    # Windows
-npm run build:linux  # Linux
-```
-
-Artifacts appear in `dist/`.
-
-## GitHub Actions
-
-On every push to `main` and on tags `v*`, the workflow builds Windows and Linux packages and uploads them as release assets (for tags) or artifacts.
-
-## Optimization notes
-
-- Disabled: Translate, background networking, default apps, sync, Safe Browsing auto-update, first-run
-- Persistent partition only for the main session
-- Small UI footprint
-- You can further reduce RAM by uncommenting `app.disableHardwareAcceleration()` in `main.js` (may affect scrolling smoothness)
+| | Electron v1 | Rust v2 |
+|--|--|--|
+| Engine | Full Chromium | System WebView |
+| Idle RAM | ~150–300 MB | typically much lower |
+| Binary | ~100+ MB | a few MB (+ system WebView) |
+| Extensions | Chrome extensions | limited / desktop app |
 
 ## License
 

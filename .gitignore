@@ -1,7 +1,8 @@
-node_modules/
+/target/
+**/*.rs.bk
+Cargo.lock
+settings.json
 dist/
-*.log
-.DS_Store
-*.crx
-extensions/bitwarden/
-store.json
+*.exe
+node_modules/
+package-lock.json
